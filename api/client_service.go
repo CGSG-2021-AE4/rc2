@@ -10,11 +10,6 @@ import (
 
 var wsUpgrader = websocket.Upgrader{}
 
-// Serves clients' websocket connections
-type ClientService struct {
-	conns map[string]*ClientConn // SHIT not thread safe
-}
-
 // Constructor
 func NewClientService() *ClientService {
 	return &ClientService{
@@ -35,14 +30,6 @@ func (cs *ClientService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-// Client connection
-type ClientConn struct {
-	cs         *ClientService
-	conn       *websocket.Conn
-	login      string
-	readerChan chan []byte
-}
-
 func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
 	return &ClientConn{
 		cs:         cs,
@@ -50,25 +37,6 @@ func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
 		login:      "",
 		readerChan: make(chan []byte, 3),
 	}
-}
-
-type csError struct {
-	err string
-}
-
-func (e csError) Error() string {
-	return e.err
-}
-
-func NewError(msg string) csError {
-	return csError{
-		err: msg,
-	}
-}
-
-// Messages' structs
-type registerMsg struct { // register
-	Login string `json:"login"`
 }
 
 func (c *ClientConn) WriteError(errMsg string) {

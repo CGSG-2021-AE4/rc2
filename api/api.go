@@ -7,18 +7,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
-type APIServer struct {
-	listenAddr        string
-	clientService     *ClientService
-	msgHandlerService *MsgHandler
-}
-
 func NewServer(listenAddr string) *APIServer {
 	apiPtr := &APIServer{
 		listenAddr:    listenAddr,
 		clientService: NewClientService(),
 	}
-	apiPtr.msgHandlerService = NewMsgHandler(apiPtr)
+	apiPtr.msgHandlerService = NewMsgHandlerService(apiPtr)
 	return apiPtr
 }
 

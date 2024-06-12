@@ -24,3 +24,15 @@ func makeHandleFunc(f apiHandleFunc) http.HandlerFunc {
 		}
 	}
 }
+
+// Error implementation
+
+func (e rcError) Error() string {
+	return e.err
+}
+
+func NewError(msg string) rcError {
+	return rcError{
+		err: msg,
+	}
+}

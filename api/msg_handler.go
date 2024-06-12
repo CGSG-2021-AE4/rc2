@@ -6,23 +6,14 @@ import (
 	"net/http"
 )
 
-type sendRequest struct {
-	Login string          `json:"login"`
-	Msg   json.RawMessage `json:"msg"`
-}
-
-type MsgHandler struct {
-	s *APIServer
-}
-
-func NewMsgHandler(s *APIServer) *MsgHandler {
-	return &MsgHandler{
+func NewMsgHandlerService(s *APIServer) *MsgHandlerService {
+	return &MsgHandlerService{
 		s: s,
 	}
 }
 
-func (mh *MsgHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var body sendRequest
+func (mh *MsgHandlerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var body sendRequestMsg
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "Invalid json", http.StatusBadRequest)
 		return
