@@ -29,7 +29,10 @@ func (cs *ClientService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := NewClient(cs, c)
-	go client.Run()
+	go func() {
+		client.Run()
+		log.Println("Connnection ", c.RemoteAddr(), " closed.")
+	}()
 }
 
 // Client connection
@@ -44,6 +47,20 @@ func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
 		cs:    cs,
 		conn:  c,
 		login: "",
+	}
+}
+
+type csError struct {
+	err string
+}
+
+func (e csError) Error() string {
+	return e.err
+}
+
+func NewError(msg string) csError {
+	return csError{
+		err: msg,
 	}
 }
 
@@ -64,10 +81,20 @@ func (c *ClientConn) WriteError(errMsg string) {
 	}
 }
 
-func (c *ClientConn) Run() {
-	defer c.conn.Close()
+func (c *ClientConn) Run() (outErr error, notifyClient bool) {
+	defer func() {
+		if outErr != nil {
+			log.Println("Connnection ", c.conn.RemoteAddr(), " closed with error: ", outErr.Error())
+			if notifyClient {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte(outErr.Error()))
+			}
+		} else {
+			c.conn.WriteMessage(websocket.CloseMessage, []byte("Bye"))
+		}
+		c.conn.Close()
+	}()
+
 	c.conn.SetCloseHandler(func(code int, text string) error {
-		log.Println("Close connection.")
 		if c.login != "" && c.cs.conns[c.login] != nil {
 			delete(c.cs.conns, c.login)
 		}
@@ -75,63 +102,48 @@ func (c *ClientConn) Run() {
 	})
 
 	// Registration
-	registraionComplete := false
-	for !registraionComplete {
-		// Wait for registration request
-		wsmt, buf, err := c.conn.ReadMessage()
-		if err != nil {
-			log.Println("READ ERROR: ", err)
-			return
-		}
-		// Check that it is registration
-		if wsmt != websocket.BinaryMessage {
-			if wsmt == websocket.CloseMessage {
-				return
-			}
-			c.WriteError("Invalid msg type: wait for registration")
-			continue
-		}
-		mt, rawMsg, err := ReadMsg[json.RawMessage](buf)
-		if err != nil {
-			c.WriteError("Invalid json")
-			continue
-		}
-		if mt != "registration" {
-			c.WriteError("Invalid msg type: wait for registration")
-			continue
-		}
-		var msg registerMsg
-		if err := json.Unmarshal(rawMsg, &msg); err != nil {
-			log.Println(err)
-			return
-		}
-		// Check if such a login is already registered
-		if c.cs.conns[msg.Login] != nil {
-			c.WriteError("Double registration")
-			continue
-		}
-		// Register login
-		c.cs.conns[msg.Login] = c
-		registraionComplete = true
-		// Notify that is fine
-		completeMsg, err := WriteMsg("msg", "Registration complete")
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		if err := c.conn.WriteMessage(websocket.BinaryMessage, completeMsg); err != nil {
-			log.Println(err)
-			return
-		}
+	// Wait for registration request
+	wsmt, buf, err := c.conn.ReadMessage()
+	if err != nil {
+		return err, false
 	}
-	log.Println(registraionComplete)
+	// Check that it is registration
+	if wsmt != websocket.BinaryMessage {
+		return NewError("Invalid registration message type"), true
+	}
+	mt, rawMsg, err := ReadMsg[json.RawMessage](buf)
+	if err != nil {
+		return NewError("Invalid json"), true
+	}
+	if mt != "registration" {
+		return NewError("Invalid registration message type"), true
+	}
+	var msg registerMsg
+	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+		return err, true
+	}
+	// Check if such a login is already registered
+	if c.cs.conns[msg.Login] != nil {
+		return NewError("Double registration"), true
+	}
+	// Register login
+	c.cs.conns[msg.Login] = c
+	// Notify that is fine
+	completeMsg, err := WriteMsg("msg", "Registration complete")
+	if err != nil {
+		return err, false
+	}
+	if err := c.conn.WriteMessage(websocket.BinaryMessage, completeMsg); err != nil {
+		return err, false
+	}
+	log.Println("registraionComplete")
 
 	for {
 		wsmt, buf, err := c.conn.ReadMessage()
 		if err != nil {
 			log.Println("READ ERROR: ", err)
 			if websocket.IsCloseError(err) {
-				return
+				return err, false
 			}
 			continue
 		}

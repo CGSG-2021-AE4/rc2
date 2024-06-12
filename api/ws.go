@@ -16,7 +16,7 @@ func ReadMsg[ContentT any](buf []byte) (string, ContentT, error) {
 	var msg readMsgWrapper[ContentT]
 
 	if err := json.Unmarshal(buf, &msg); err != nil {
-		return "", msg.Content, err
+		return "", *new(ContentT), err
 	}
 	return msg.MsgType, msg.Content, nil
 }
