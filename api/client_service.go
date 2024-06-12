@@ -37,16 +37,18 @@ func (cs *ClientService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // Client connection
 type ClientConn struct {
-	cs    *ClientService
-	conn  *websocket.Conn
-	login string
+	cs         *ClientService
+	conn       *websocket.Conn
+	login      string
+	readerChan chan []byte
 }
 
 func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
 	return &ClientConn{
-		cs:    cs,
-		conn:  c,
-		login: "",
+		cs:         cs,
+		conn:       c,
+		login:      "",
+		readerChan: make(chan []byte, 3),
 	}
 }
 
@@ -136,6 +138,7 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 			delete(c.cs.conns, c.login)
 			log.Println("Unregistered:", c.login)
 		}
+		close(c.readerChan)
 		c.conn.Close()
 	}()
 
@@ -146,13 +149,20 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 	for {
 		wsmt, buf, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Println("READ ERROR: ", err)
-			break
+			return err, false
 		}
-		log.Println("GO MSG: ", websocket.FormatMessageType(wsmt), buf)
 		if wsmt == websocket.CloseMessage {
 			break
 		}
+		c.readerChan <- buf
 	}
 	return nil, false
+}
+
+func (c *ClientConn) WriteMsg(buf []byte) ([]byte, error) {
+	if err := c.conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+		return nil, err
+	}
+	ans := <-c.readerChan
+	return ans, nil
 }
