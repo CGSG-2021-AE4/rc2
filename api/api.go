@@ -21,7 +21,9 @@ func NewServer(listenAddr string) *APIServer {
 
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
+
 	router.Handle("/client_service", s.clientService)
+
 	fmt.Printf("Serving %s\n", s.listenAddr)
 	http.ListenAndServe(s.listenAddr, router)
 }

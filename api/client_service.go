@@ -81,26 +81,7 @@ func (c *ClientConn) WriteError(errMsg string) {
 	}
 }
 
-func (c *ClientConn) Run() (outErr error, notifyClient bool) {
-	defer func() {
-		if outErr != nil {
-			log.Println("Connnection ", c.conn.RemoteAddr(), " closed with error: ", outErr.Error())
-			if notifyClient {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte(outErr.Error()))
-			}
-		} else {
-			c.conn.WriteMessage(websocket.CloseMessage, []byte("Bye"))
-		}
-		c.conn.Close()
-	}()
-
-	c.conn.SetCloseHandler(func(code int, text string) error {
-		if c.login != "" && c.cs.conns[c.login] != nil {
-			delete(c.cs.conns, c.login)
-		}
-		return nil
-	})
-
+func (c *ClientConn) register() (outErr error, notifyClient bool) {
 	// Registration
 	// Wait for registration request
 	wsmt, buf, err := c.conn.ReadMessage()
@@ -127,7 +108,8 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 		return NewError("Double registration"), true
 	}
 	// Register login
-	c.cs.conns[msg.Login] = c
+	c.login = msg.Login
+	c.cs.conns[c.login] = c
 	// Notify that is fine
 	completeMsg, err := WriteMsg("msg", "Registration complete")
 	if err != nil {
@@ -137,16 +119,40 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 		return err, false
 	}
 	log.Println("registraionComplete")
+	return nil, false
+}
+
+func (c *ClientConn) Run() (outErr error, notifyClient bool) {
+	defer func() {
+		if outErr != nil {
+			log.Println("Connnection ", c.conn.RemoteAddr(), " closed with error: ", outErr.Error())
+			if notifyClient {
+				c.conn.WriteMessage(websocket.CloseMessage, []byte(outErr.Error()))
+			}
+		} else {
+			c.conn.WriteMessage(websocket.CloseMessage, []byte("Bye"))
+		}
+		if c.login != "" && c.cs.conns[c.login] != nil {
+			delete(c.cs.conns, c.login)
+			log.Println("Unregistered:", c.login)
+		}
+		c.conn.Close()
+	}()
+
+	if err, doNotify := c.register(); err != nil {
+		return err, doNotify
+	}
 
 	for {
 		wsmt, buf, err := c.conn.ReadMessage()
 		if err != nil {
 			log.Println("READ ERROR: ", err)
-			if websocket.IsCloseError(err) {
-				return err, false
-			}
-			continue
+			break
 		}
 		log.Println("GO MSG: ", websocket.FormatMessageType(wsmt), buf)
+		if wsmt == websocket.CloseMessage {
+			break
+		}
 	}
+	return nil, false
 }
