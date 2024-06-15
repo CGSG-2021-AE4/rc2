@@ -1,12 +1,17 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"rc/api"
 )
 
 func main() {
 	fmt.Println("CGSG forever!!!")
-	server := api.NewServer("localhost", "8080", "3047")
+
+	host := flag.String("h", "localhost", "Host name")
+	flag.Parse()
+
+	server := api.NewServer(*host, "8080", "3047")
 	server.Run()
 }
