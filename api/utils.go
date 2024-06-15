@@ -25,14 +25,9 @@ func makeHandleFunc(f apiHandleFunc) http.HandlerFunc {
 	}
 }
 
-// Error implementation
+// Error implementation - found in Effective Go
+type rcError string
 
-func (e rcError) Error() string {
-	return e.err
-}
-
-func NewError(msg string) rcError {
-	return rcError{
-		err: msg,
-	}
+func (err rcError) Error() string {
+	return string(err)
 }

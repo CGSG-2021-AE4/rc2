@@ -2,15 +2,18 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
 )
 
-func NewServer(listenAddr string) *APIServer {
+func NewServer(host, httpPort, tcpPort string) *APIServer {
 	apiPtr := &APIServer{
-		listenAddr:    listenAddr,
-		clientService: NewClientService(),
+		host:          host,
+		httpPort:      httpPort,
+		tcpPort:       tcpPort,
+		clientService: NewClientService(host + ":" + tcpPort),
 	}
 	apiPtr.msgHandlerService = NewMsgHandlerService(apiPtr)
 	return apiPtr
@@ -19,9 +22,12 @@ func NewServer(listenAddr string) *APIServer {
 func (s *APIServer) Run() {
 	router := mux.NewRouter()
 
-	router.Handle("/client_service", s.clientService)
+	s.clientService.Serve()
 	router.Handle("/send", s.msgHandlerService)
 
-	fmt.Printf("Serving %s\n", s.listenAddr)
-	http.ListenAndServe(s.listenAddr, router)
+	fmt.Printf("Serving %s\n", s.host)
+	if err := http.ListenAndServe(s.host+":"+s.httpPort, router); err != nil {
+		log.Println(err.Error())
+	}
+	log.Println("END")
 }

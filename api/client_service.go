@@ -3,34 +3,52 @@ package api
 import (
 	"encoding/json"
 	"log"
-	"net/http"
+	"net"
 
-	"github.com/gorilla/websocket"
+	cw "github.com/CGSG-2021-AE4/go_utils/conn_wrapper"
 )
 
-var wsUpgrader = websocket.Upgrader{}
-
 // Constructor
-func NewClientService() *ClientService {
+func NewClientService(listenAddr string) *ClientService {
 	return &ClientService{
-		conns: map[string]*ClientConn{},
+		listenAddr: listenAddr,
+		conns:      map[string]*ClientConn{},
 	}
 }
 
-func (cs *ClientService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c, err := wsUpgrader.Upgrade(w, r, nil)
+func (cs *ClientService) Serve() error {
+	listener, err := net.Listen("tcp", cs.listenAddr)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return err
 	}
-	client := NewClient(cs, c)
-	go func() {
-		client.Run()
-		log.Println("Connnection ", c.RemoteAddr(), " closed.")
+
+	// Start accept cycle
+	go func() (err error) {
+		defer func() {
+			if err != nil {
+				log.Println("End accept cycle with error:", err.Error())
+			} else {
+				log.Println("End accept cycle")
+			}
+		}()
+
+		for {
+			c, err := listener.Accept()
+			log.Println("New conn: ", c.RemoteAddr())
+			if err != nil {
+				return err
+			}
+			client := NewClient(cs, cw.NewConn(c))
+			go func() {
+				client.Run()
+				log.Println("Connnection ", c.RemoteAddr(), " closed.")
+			}()
+		}
 	}()
+	return nil
 }
 
-func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
+func NewClient(cs *ClientService, c *cw.ConnWrapper) *ClientConn {
 	return &ClientConn{
 		cs:         cs,
 		conn:       c,
@@ -39,14 +57,9 @@ func NewClient(cs *ClientService, c *websocket.Conn) *ClientConn {
 	}
 }
 
-func (c *ClientConn) WriteError(errMsg string) {
-	log.Println("WRITE ERROR: ", errMsg)
-	msg, err := WriteError(errMsg)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if err := c.conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+func (c *ClientConn) WriteError(msg string) {
+	log.Println("WRITE ERROR: ", msg)
+	if err := c.conn.Write(cw.MsgTypeError, []byte(msg)); err != nil {
 		log.Println(err)
 	}
 }
@@ -54,60 +67,48 @@ func (c *ClientConn) WriteError(errMsg string) {
 func (c *ClientConn) register() (outErr error, notifyClient bool) {
 	// Registration
 	// Wait for registration request
-	wsmt, buf, err := c.conn.ReadMessage()
+	mt, buf, err := c.conn.Read()
 	if err != nil {
-		return err, false
+		return err, true
 	}
-	// Check that it is registration
-	if wsmt != websocket.BinaryMessage {
-		return NewError("Invalid registration message type"), true
-	}
-	mt, rawMsg, err := ReadMsg[json.RawMessage](buf)
-	if err != nil {
-		return NewError("Invalid json"), true
-	}
-	if mt != "registration" {
-		return NewError("Invalid registration message type"), true
+	if mt != cw.MsgTypeRegistration {
+		return rcError("Invalid message type"), true
 	}
 	var msg registerMsg
-	if err := json.Unmarshal(rawMsg, &msg); err != nil {
+	if err := json.Unmarshal(buf, &msg); err != nil {
 		return err, true
 	}
 	// Check if such a login is already registered
 	if c.cs.conns[msg.Login] != nil {
-		return NewError("Double registration"), true
+		return rcError("Double registration"), true
 	}
 	// Register login
 	c.login = msg.Login
 	c.cs.conns[c.login] = c
 	// Notify that is fine
-	completeMsg, err := WriteMsg("msg", "Registration complete")
-	if err != nil {
+	if err := c.conn.Write(cw.MsgTypeOk, []byte("Registration complete")); err != nil {
 		return err, false
 	}
-	if err := c.conn.WriteMessage(websocket.BinaryMessage, completeMsg); err != nil {
-		return err, false
-	}
-	log.Println("registraionComplete")
+	log.Println("Registraion complete")
 	return nil, false
 }
 
 func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 	defer func() {
 		if outErr != nil {
-			log.Println("Connnection ", c.conn.RemoteAddr(), " closed with error: ", outErr.Error())
+			log.Println("Connnection ", c.conn.Conn.RemoteAddr(), " closed with error: ", outErr.Error())
 			if notifyClient {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte(outErr.Error()))
+				c.conn.Write(cw.MsgTypeClose, []byte(outErr.Error()))
 			}
 		} else {
-			c.conn.WriteMessage(websocket.CloseMessage, []byte("Bye"))
+			c.conn.Write(cw.MsgTypeClose, []byte("Bye"))
 		}
 		if c.login != "" && c.cs.conns[c.login] != nil {
 			delete(c.cs.conns, c.login)
 			log.Println("Unregistered:", c.login)
 		}
 		close(c.readerChan)
-		c.conn.Close()
+		c.conn.Conn.Close()
 	}()
 
 	if err, doNotify := c.register(); err != nil {
@@ -115,11 +116,12 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 	}
 
 	for {
-		wsmt, buf, err := c.conn.ReadMessage()
+		mt, buf, err := c.conn.Read()
 		if err != nil {
 			return err, false
 		}
-		if wsmt == websocket.CloseMessage {
+		log.Println("Got msg", mt, buf)
+		if mt == cw.MsgTypeClose {
 			break
 		}
 		c.readerChan <- buf
@@ -128,7 +130,7 @@ func (c *ClientConn) Run() (outErr error, notifyClient bool) {
 }
 
 func (c *ClientConn) WriteMsg(buf []byte) ([]byte, error) {
-	if err := c.conn.WriteMessage(websocket.BinaryMessage, buf); err != nil {
+	if err := c.conn.Write(cw.MsgTypeRequest, buf); err != nil {
 		return nil, err
 	}
 	ans := <-c.readerChan

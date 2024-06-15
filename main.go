@@ -7,6 +7,6 @@ import (
 
 func main() {
 	fmt.Println("CGSG forever!!!")
-	server := api.NewServer(":3047")
+	server := api.NewServer("localhost", "8080", "3047")
 	server.Run()
 }

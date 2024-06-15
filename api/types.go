@@ -3,25 +3,28 @@ package api
 import (
 	"encoding/json"
 
-	"github.com/gorilla/websocket"
+	cw "github.com/CGSG-2021-AE4/go_utils/conn_wrapper"
 )
 
 // Main API server
 type APIServer struct {
-	listenAddr        string
+	host              string
+	httpPort          string
+	tcpPort           string
 	clientService     *ClientService
 	msgHandlerService *MsgHandlerService
 }
 
 // Serves clients' websocket connections
 type ClientService struct {
-	conns map[string]*ClientConn // SHIT not thread safe
+	listenAddr string
+	conns      map[string]*ClientConn // SHIT not thread safe
 }
 
 // Client connection
 type ClientConn struct {
 	cs         *ClientService
-	conn       *websocket.Conn
+	conn       *cw.ConnWrapper
 	login      string
 	readerChan chan []byte
 }
@@ -29,11 +32,6 @@ type ClientConn struct {
 // Message handler service
 type MsgHandlerService struct {
 	s *APIServer
-}
-
-// My error implementation
-type rcError struct {
-	err string
 }
 
 /////////////// Messages' structs
