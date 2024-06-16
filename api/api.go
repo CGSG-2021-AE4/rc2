@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 
@@ -25,7 +24,7 @@ func (s *APIServer) Run() {
 	s.clientService.Serve()
 	router.Handle("/send", s.msgHandlerService)
 
-	fmt.Printf("Serving %s\n", s.host)
+	log.Printf("Serving HTTP %s\n", s.host+":"+s.httpPort)
 	if err := http.ListenAndServe(s.host+":"+s.httpPort, router); err != nil {
 		log.Println(err.Error())
 	}

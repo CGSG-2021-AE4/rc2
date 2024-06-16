@@ -17,6 +17,7 @@ func NewClientService(listenAddr string) *ClientService {
 }
 
 func (cs *ClientService) Serve() error {
+	log.Println("TCP server: ", cs.listenAddr)
 	listener, err := net.Listen("tcp", cs.listenAddr)
 	if err != nil {
 		return err
@@ -34,15 +35,15 @@ func (cs *ClientService) Serve() error {
 
 		for {
 			c, err := listener.Accept()
-			log.Println("New conn: ", c.RemoteAddr())
 			if err != nil {
 				return err
 			}
-			client := NewClient(cs, cw.NewConn(c))
-			go func() {
+			log.Println("New conn: ", c.RemoteAddr().Network(), c.RemoteAddr())
+			go func(c net.Conn) {
+				client := NewClient(cs, cw.NewConn(c))
 				client.Run()
-				log.Println("Connnection ", c.RemoteAddr(), " closed.")
-			}()
+				log.Println("Connnection ", c.RemoteAddr().Network(), c.RemoteAddr(), " closed.")
+			}(c)
 		}
 	}()
 	return nil

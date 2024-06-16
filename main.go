@@ -9,9 +9,11 @@ import (
 func main() {
 	fmt.Println("CGSG forever!!!")
 
-	host := flag.String("h", "localhost", "Host name")
+	host := flag.String("host", "localhost", "Host name")
+	httpPort := flag.String("http-port", "8080", "HTTP request port")
+	tcpPort := flag.String("tcp-port", "3047", "TCP request port")
 	flag.Parse()
 
-	server := api.NewServer(*host, "8080", "3047")
+	server := api.NewServer(*host, *httpPort, *tcpPort)
 	server.Run()
 }
