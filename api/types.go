@@ -21,12 +21,20 @@ type ClientService struct {
 	conns      map[string]*ClientConn // SHIT not thread safe
 }
 
+// Messages' structs
+type readMsg struct {
+	mt  byte
+	buf []byte
+}
+
 // Client connection
 type ClientConn struct {
 	cs         *ClientService
-	conn       *cw.ConnWrapper
+	conn       *cw.Conn
+	isOpen     bool
 	login      string
-	readerChan chan []byte
+	readerChan chan readMsg
+	doneChan   chan struct{}
 }
 
 // Message handler service

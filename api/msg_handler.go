@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	cw "github.com/CGSG-2021-AE4/go_utils/conn_wrapper"
 )
 
 func NewMsgHandlerService(s *APIServer) *MsgHandlerService {
@@ -31,7 +33,7 @@ func (mh *MsgHandlerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := w.Write(response); err != nil {
+	if _, err := w.Write([]byte("Response type: " + cw.FormatError(response.mt) + ", Msg: " + string(response.buf))); err != nil { // TODO format msg type as well
 		log.Println(err)
 	}
 }
