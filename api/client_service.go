@@ -9,10 +9,11 @@ import (
 )
 
 // Constructor
-func NewClientService(listenAddr string) *ClientService {
+func NewClientService(server *APIServer, listenAddr string) *ClientService {
 	return &ClientService{
+		server:     server,
 		listenAddr: listenAddr,
-		conns:      map[string]*ClientConn{},
+		conns:      make(map[string]*ClientConn),
 	}
 }
 
@@ -22,6 +23,7 @@ func (cs *ClientService) Serve() error {
 	if err != nil {
 		return err
 	}
+	cs.listener = listener
 
 	// Start accept cycle
 	go func() (err error) {
@@ -34,7 +36,7 @@ func (cs *ClientService) Serve() error {
 		}()
 
 		for {
-			c, err := listener.Accept()
+			c, err := cs.listener.Accept()
 			if err != nil {
 				return err
 			}
@@ -57,6 +59,30 @@ func (cs *ClientService) Serve() error {
 	}()
 	return nil
 }
+
+func (cs *ClientService) GetCurClients() []*ClientConn {
+	cs.connMutex.Lock()
+	defer cs.connMutex.Unlock()
+
+	conns := make([]*ClientConn, len(cs.conns))
+	i := 0
+	for _, c := range cs.conns {
+		conns[i] = c
+		i++
+	}
+	return conns
+}
+
+func (cs *ClientService) Close() error {
+	if cs.listener != nil {
+		log.Println("Close TCP listener")
+		return cs.listener.Close()
+	}
+	log.Println("Close TCP clistener is NIL")
+	return nil
+}
+
+/////////////// Client connection
 
 func NewClient(cs *ClientService, c *cw.Conn) *ClientConn {
 	return &ClientConn{
@@ -94,12 +120,16 @@ func (c *ClientConn) register() error {
 		return err
 	}
 	// Check if such a login is already registered
+	c.cs.connMutex.Lock()
+	defer c.cs.connMutex.Unlock() // But I spend time on writing...
+
 	if c.cs.conns[regMsg.Login] != nil {
 		return rcError("Double registration")
 	}
 	// Register login
 	c.login = regMsg.Login
 	c.cs.conns[c.login] = c
+
 	// Notify that is fine
 	if err := c.conn.Write(cw.MsgTypeOk, []byte("Registration complete")); err != nil {
 		return err
@@ -136,6 +166,7 @@ func (c *ClientConn) Run() (err error) {
 	defer func() {
 		defer func() { // omg defer in defer... but I have to close channels
 			close(c.readerChan)
+			c.cs.server.statService.OnDisconnect(c)
 		}()
 		// Run will log error of close here and return error of closing if it occurred
 		if err != nil { // If there is error
@@ -146,6 +177,9 @@ func (c *ClientConn) Run() (err error) {
 				}
 			}
 		}
+		c.cs.connMutex.Lock()
+		defer c.cs.connMutex.Unlock() // But I spend time on writing...
+
 		if c.login != "" && c.cs.conns[c.login] != nil {
 			delete(c.cs.conns, c.login)
 			log.Println("Unregistered:", c.login)
@@ -157,6 +191,7 @@ func (c *ClientConn) Run() (err error) {
 			err = c.conn.NetConn.Close()
 		}
 	}()
+	c.cs.server.statService.OnConnect(c)
 
 	// Starting reader goroutine
 	go c.readCycle()
@@ -165,12 +200,10 @@ func (c *ClientConn) Run() (err error) {
 		return err
 	}
 
-	for { // It seams I just have to wait untill I have to close connection...
-		select {
-		case <-c.doneChan:
-			return nil
-		}
+	for range c.doneChan { // It seams I just have to wait untill I have to close connection...
+		return nil
 	}
+	return rcError("Reach return after infinit cycle.")
 }
 
 func (c *ClientConn) WriteMsg(buf []byte) (readMsg, error) {
