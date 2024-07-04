@@ -17,7 +17,7 @@ func NewClientService(server *APIServer, listenAddr string) *ClientService {
 	}
 }
 
-func (cs *ClientService) Serve() error {
+func (cs *ClientService) Run() error {
 	log.Println("TCP server: ", cs.listenAddr)
 	listener, err := net.Listen("tcp", cs.listenAddr)
 	if err != nil {

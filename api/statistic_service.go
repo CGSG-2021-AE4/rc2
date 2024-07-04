@@ -117,13 +117,15 @@ func (ss *StatService) run() (err error) {
 	// }
 }
 
+func (ss *StatService) Run() {
+	go ss.run()
+}
+
 func NewStatService(server *APIServer) *StatService {
 	ss := StatService{
 		server:         server,
 		startTime:      time.Now(),
 		connectedUsers: make(map[string]connectedUserStat),
 	}
-	go ss.run()
-
 	return &ss
 }

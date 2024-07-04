@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 )
 
 func NewServer(env EnvVariables) *APIServer {
@@ -14,6 +14,10 @@ func NewServer(env EnvVariables) *APIServer {
 		env:      env,
 		DoneChan: make(chan struct{}),
 	}
+
+	// Create http server
+
+	// Create services
 	apiPtr.clientService = NewClientService(apiPtr, env.Host+":"+env.TcpPort)
 	apiPtr.msgHandlerService = NewMsgHandlerService(apiPtr)
 	apiPtr.statService = NewStatService(apiPtr)
@@ -21,10 +25,13 @@ func NewServer(env EnvVariables) *APIServer {
 }
 
 func (s *APIServer) Run() {
-	s.clientService.Serve()
+	// Start services
+	s.clientService.Run()
+	s.statService.Run()
 
-	router := mux.NewRouter()
-	router.Handle("/send", s.msgHandlerService)
+	// Run http services
+	router := gin.New()
+	router.POST("/send", HandleF(s.msgHandlerService))
 
 	s.httpServer = &http.Server{Addr: s.env.Host + ":" + s.env.HttpPort, Handler: router}
 

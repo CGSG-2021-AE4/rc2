@@ -2,10 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	cw "github.com/CGSG-2021-AE4/go_utils/conn_wrapper"
+	"github.com/gin-gonic/gin"
 )
 
 func NewMsgHandlerService(s *APIServer) *MsgHandlerService {
@@ -14,26 +14,24 @@ func NewMsgHandlerService(s *APIServer) *MsgHandlerService {
 	}
 }
 
-func (mh *MsgHandlerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (mh *MsgHandlerService) HandleHTTP(c *gin.Context) {
 	var body sendRequestMsg
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "Invalid json", http.StatusBadRequest)
+	if err := json.NewDecoder(c.Request.Body).Decode(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Invalid json"})
 		return
 	}
 
-	c := mh.s.clientService.conns[body.Login]
+	conn := mh.s.clientService.conns[body.Login]
 	if c == nil {
-		http.Error(w, "Client is not connected", http.StatusBadRequest)
+		c.JSON(http.StatusBadRequest, gin.H{"status": "Client is not connected"})
 		return
 	}
 
-	response, err := c.WriteMsg(body.Msg)
+	response, err := conn.WriteMsg(body.Msg)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		c.JSON(http.StatusBadRequest, gin.H{"status": err.Error()})
 		return
 	}
 
-	if _, err := w.Write([]byte("Response type: " + cw.FormatError(response.mt) + ", Msg: " + string(response.buf))); err != nil { // TODO format msg type as well
-		log.Println(err)
-	}
+	c.JSON(http.StatusOK, gin.H{"status": "Response type: " + cw.FormatError(response.mt) + ", Msg: " + string(response.buf)})
 }
