@@ -1,6 +1,8 @@
 package api
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+)
 
 // Error implementation - found in Effective Go
 type rcError string
