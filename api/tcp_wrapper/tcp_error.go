@@ -1,13 +1,28 @@
 package tcp_wrapper
 
-type tcpError byte
+// Error codes
+const ( // TODO change to int codes
+	ErrContextDone byte = iota
+	ErrTimeout
+	ErrConnectionDeclined
+	ErrHandshakeFailed
+	ErrInvalidValidationMsg
+	ErrInvalidAuthMsgType
+	ErrInvalidMsgLen
+)
 
-func (err tcpError) Error() string {
-	switch err {
+// Error type with description
+type TcpError struct {
+	Code  byte
+	Descr string
+}
+
+func (err TcpError) Error() string {
+	switch err.Code {
 	case ErrContextDone:
 		return "Context done"
-	case ErrAcceptTimeout:
-		return "Accept timeout"
+	case ErrTimeout:
+		return "Timeout"
 	case ErrHandshakeFailed:
 		return "Handshake failed"
 	case ErrInvalidValidationMsg:
@@ -20,13 +35,12 @@ func (err tcpError) Error() string {
 	return "Undefined error code"
 }
 
-// Some error contants
+// New error functions that does not set description
+func ErrCode(code byte) TcpError {
+	return TcpError{Code: code}
+}
 
-const ( // TODO change to int codes
-	ErrContextDone = tcpError(iota)
-	ErrAcceptTimeout
-	ErrHandshakeFailed
-	ErrInvalidValidationMsg
-	ErrInvalidAuthMsgType
-	ErrInvalidMsgLen
-)
+// Net error function that sets both code and description
+func ErrDescr(code byte, descr string) TcpError {
+	return TcpError{Code: code, Descr: descr}
+}
