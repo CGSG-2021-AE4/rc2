@@ -22,3 +22,14 @@ type ReadMsg struct {
 	Mt  byte
 	Buf []byte
 }
+
+type StriptMsg struct { // stript
+	Name  string `json:"name"`
+	Query string `json:"query"`
+}
+
+type MainLoopMsg struct {
+	Password string          `json:"password"`
+	Type     string          `json:"type"`
+	Content  json.RawMessage `json:"content"`
+}

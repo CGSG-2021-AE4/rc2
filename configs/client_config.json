@@ -1,0 +1,11 @@
+{
+  "url": "127.0.0.1:3047",
+  "login": "cgsg95",
+  "password": "aboba",
+  "scripts": [
+    {
+      "name": "test",
+      "file": "./out/test.bat"
+    }
+  ]
+}
