@@ -17,6 +17,10 @@ func handleClient(c *tcpw.Conn) error {
 		msgType, msg, err := c.Read(readCtx)
 		if err != nil {
 			log.Println("Read finished with error:", err.Error())
+			if err, ok := err.(tcpw.TcpError); ok && err.Code == tcpw.ErrContextDone {
+				continue
+			}
+			return err
 		}
 		log.Println(msgType, string(msg))
 		<-pause

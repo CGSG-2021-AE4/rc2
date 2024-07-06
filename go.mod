@@ -1,4 +1,4 @@
-module rc
+module github.com/CGSG-2021-AE4/rc2
 
 go 1.22.3
 

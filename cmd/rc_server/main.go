@@ -6,8 +6,9 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"rc/api"
 	"time"
+
+	"github.com/CGSG-2021-AE4/rc2/api/server"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 	statUpdateTimeout := flag.Int64("stat-update-timeout", 10000, "Timeout between statistics' updates in MS")
 	flag.Parse()
 
-	env := api.EnvVariables{
+	env := server.EnvVariables{
 		Host:           *host,
 		HttpPort:       *httpPort,
 		TcpPort:        *tcpPort,
@@ -31,18 +32,18 @@ func main() {
 		StatTimeout:    time.Duration(*statUpdateTimeout),
 	}
 
-	server := api.NewServer(env)
+	apiServer := server.New(env)
 
 	// Interuption handling
 	interupt := make(chan os.Signal, 1)
 	signal.Notify(interupt, os.Interrupt)
 
-	go func(server *api.APIServer) {
+	go func(apiServer *server.Server) {
 		signal := <-interupt
 		log.Println("Got interupt signal: ", signal.String())
-		server.Close()
-	}(server)
+		apiServer.Close()
+	}(apiServer)
 
-	server.Run()
+	apiServer.Run()
 	log.Println("Main finished")
 }

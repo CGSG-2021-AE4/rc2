@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"log"
-	tcpw "rc/api/tcp_wrapper"
+	tcpw "rc/pkg/tcp_wrapper"
 	"time"
 )
 
