@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"log"
-	tcpw "rc/pkg/tcp_wrapper"
 	"time"
+
+	"github.com/CGSG-2021-AE4/rc2/api"
+	tcpw "github.com/CGSG-2021-AE4/rc2/pkg/tcp_wrapper"
 )
 
 // Just for eazier error handling
@@ -36,8 +38,5 @@ func run() error {
 
 func main() {
 	log.Println("CGSG forever!!!")
-	if err := run(); err != nil {
-		log.Println("Run finished with error:", err.Error())
-	}
-	log.Println("END")
+	api.RunAndLog(run, "MAIN")
 }

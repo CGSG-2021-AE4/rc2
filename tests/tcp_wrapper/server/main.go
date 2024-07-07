@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"log"
-	tcpw "rc/api/tcp_wrapper"
 	"time"
+
+	tcpw "github.com/CGSG-2021-AE4/rc2/pkg/tcp_wrapper"
 )
 
 func handleClient(c *tcpw.Conn) error {

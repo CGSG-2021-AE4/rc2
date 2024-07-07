@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/CGSG-2021-AE4/rc2/api"
 	"github.com/CGSG-2021-AE4/rc2/api/server/client_service"
 )
 
@@ -53,7 +54,7 @@ func New(filename string) *Service {
 }
 
 func (ss *Service) Run() {
-	go ss.run()
+	go api.RunAndLog(ss.RunSync, "Statistics service")
 }
 
 func (ss *Service) OnConnect(c *client_service.Conn) {
@@ -61,7 +62,7 @@ func (ss *Service) OnConnect(c *client_service.Conn) {
 	defer ss.Mutex.Unlock()
 
 	ss.connectedUsers[c.Login] = connectedUserStat{
-		addr:          c.Conn.NetConn.RemoteAddr().String(),
+		// addr:          c.Conn.NetConn.RemoteAddr().String(),
 		connStartTime: time.Now(),
 	}
 }
@@ -92,16 +93,7 @@ func (ss *Service) OnDisconnect(c *client_service.Conn) {
 	ss.currentStat.Users[ui].WorkDur += ss.currentStat.Users[ui].LastSeen.Sub(ss.connectedUsers[c.Login].connStartTime)
 }
 
-func (ss *Service) run() (err error) {
-	defer func() {
-		// Run cannot return an error so I have to handle it here
-		if err != nil {
-			log.Println("Stat service run finished with error:", err.Error())
-		} else {
-			log.Println("Stat service run finished")
-		}
-	}()
-
+func (ss *Service) RunSync() error {
 	// load
 	if err := ss.load(); err != nil {
 		return err

@@ -1,89 +1,89 @@
 package client_service
 
 import (
+	"context"
+	"encoding/json"
 	"log"
-	"net"
-	"sync"
 
-	cw "github.com/CGSG-2021-AE4/go_utils/conn_wrapper"
+	"github.com/CGSG-2021-AE4/rc2/api"
+	tcpw "github.com/CGSG-2021-AE4/rc2/pkg/tcp_wrapper"
 )
+
+/* The best way to shut down service I think is through a context
+ * It will go through all vertical stuff
+ */
 
 type Service struct {
 	listenAddr string
-	listener   net.Listener
-	connMutex  sync.Mutex
-	Conns      map[string]*Conn // SHIT not thread safe
+
+	listenerContext context.Context // Used to shut down listenning
+	stopListener    context.CancelFunc
+
+	clients *clientRegister
 }
 
 // Constructor
 func New(listenAddr string) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{
-		listenAddr: listenAddr,
-		Conns:      make(map[string]*Conn),
+		listenAddr:      listenAddr,
+		listenerContext: ctx,
+		stopListener:    cancel,
+		clients:         newClientRegister(),
 	}
 }
 
-func (cs *Service) Run() error {
+func (cs *Service) RunSync() error {
 	log.Println("TCP server: ", cs.listenAddr)
-	listener, err := net.Listen("tcp", cs.listenAddr)
+	server, err := tcpw.NewTcpServer(cs.listenAddr)
 	if err != nil {
 		return err
 	}
-	cs.listener = listener
 
-	// Start accept cycle
-	go func() (err error) {
-		defer func() {
-			if err != nil {
-				log.Println("End accept cycle with error:", err.Error())
-			} else {
-				log.Println("End accept cycle")
-			}
-		}()
-
-		for {
-			c, err := cs.listener.Accept()
-			if err != nil {
-				return err
-			}
-			// !!! Ensure that it's right tcp connection
-			// Validation msg: "TCP forever!!!"
-			validationMsg := "TCP forever!!!"
-			buf := make([]byte, len(validationMsg))
-			if _, err := c.Read(buf); err != nil || string(buf) != validationMsg {
-				log.Println("Invalid validation msg:", string(buf))
-				c.Close()
-				continue
-			}
-			log.Println("New conn: ", c.RemoteAddr().Network(), c.RemoteAddr())
-			go func(c net.Conn) {
-				client := NewClient(cs, cw.New(c))
-				client.Run()
-				log.Println("Connnection ", c.RemoteAddr().Network(), c.RemoteAddr(), " closed.")
-			}(c)
+ListenLoop:
+	for {
+		log.Println("Listenning...") // Debug
+		connAc, err := server.Listen(cs.listenerContext)
+		if err != nil {
+			return err
 		}
-	}()
-	return nil
+
+		log.Println("Got connection")
+		// Authentification
+		// Later I will add some tokens
+		var authMsg api.AuthMsg
+		if err := json.Unmarshal(connAc.AuthMsg, &authMsg); err != nil {
+			return err
+		}
+		if cs.clients.Exist(authMsg.Login) {
+			connAc.Decline(cs.listenerContext, []byte("Client with login "+authMsg.Login+" is already connected"))
+			continue ListenLoop
+		}
+
+		// Accepting
+		conn, err := connAc.Accept(cs.listenerContext)
+		if err != nil {
+			return err
+		}
+		client := NewClient(cs, authMsg.Login, conn)
+		if err := cs.clients.Add(client); err != nil { // If something went wrong
+			client.Close()
+			continue ListenLoop
+		}
+		go func(cs *Service, c *Conn) { // Because I should remove it from client register here
+			api.RunAndLog(c.RunSync, "client "+c.Login)
+
+			if err := cs.clients.Remove(c); err != nil {
+				log.Println("Unregister client with error:", err.Error())
+			}
+		}(cs, client)
+	}
 }
 
-func (cs *Service) GetCurClients() []*Conn {
-	cs.connMutex.Lock()
-	defer cs.connMutex.Unlock()
-
-	conns := make([]*Conn, len(cs.Conns))
-	i := 0
-	for _, c := range cs.Conns {
-		conns[i] = c
-		i++
-	}
-	return conns
+func (cs *Service) Run() {
+	go api.RunAndLog(cs.RunSync, "client service")
 }
 
-func (cs *Service) Close() error {
-	if cs.listener != nil {
-		log.Println("Close TCP listener")
-		return cs.listener.Close()
-	}
-	log.Println("Close TCP clistener is NIL")
-	return nil
+func (cs *Service) Close() {
+	cs.stopListener() // Cancel context
 }

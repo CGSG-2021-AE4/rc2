@@ -6,8 +6,8 @@ import "encoding/json"
 
 /////////////// Messages' structs
 
-// register
-type RegisterMsg struct {
+// Auth
+type AuthMsg struct {
 	Login string `json:"login"`
 }
 

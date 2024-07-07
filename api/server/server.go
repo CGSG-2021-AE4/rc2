@@ -10,7 +10,6 @@ import (
 
 	"github.com/CGSG-2021-AE4/rc2/api/server/client_service"
 	msg_service "github.com/CGSG-2021-AE4/rc2/api/server/message_service"
-	"github.com/CGSG-2021-AE4/rc2/api/server/statistic_service"
 )
 
 // All environment variables that can be set with start arguments
@@ -29,8 +28,7 @@ type Server struct {
 	httpServer        *http.Server
 	clientService     *client_service.Service
 	msgHandlerService *msg_service.Service
-	statService       *statistic_service.Service
-	DoneChan          chan struct{} // Chanel that make all other threads like stat service stop
+	// statService       *statistic_service.Service
 }
 
 func HandleF(hc interface{ HandleHTTP(c *gin.Context) }) gin.HandlerFunc {
@@ -41,14 +39,13 @@ func HandleF(hc interface{ HandleHTTP(c *gin.Context) }) gin.HandlerFunc {
 
 func New(env EnvVariables) *Server {
 	apiPtr := &Server{
-		env:      env,
-		DoneChan: make(chan struct{}),
+		env: env,
 	}
 
 	// Create http server
 
 	// Create services
-	apiPtr.statService = statistic_service.New(env.StatisticsFile)
+	// apiPtr.statService = statistic_service.New(env.StatisticsFile)
 	apiPtr.clientService = client_service.New(env.Host + ":" + env.TcpPort)
 	apiPtr.msgHandlerService = msg_service.New(apiPtr.clientService)
 	return apiPtr
@@ -57,7 +54,7 @@ func New(env EnvVariables) *Server {
 func (s *Server) Run() {
 	// Start services
 	s.clientService.Run()
-	s.statService.Run()
+	// s.statService.Run()
 
 	// Run http services
 	router := gin.New()
@@ -73,12 +70,8 @@ func (s *Server) Run() {
 }
 
 func (s *Server) Close() {
-	log.Println("BBBB")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	close(s.DoneChan)
 	s.httpServer.Shutdown(ctx)
-	if err := s.clientService.Close(); err != nil {
-		log.Println("Client service closed with error:", err)
-	}
+	s.clientService.Close()
 }
