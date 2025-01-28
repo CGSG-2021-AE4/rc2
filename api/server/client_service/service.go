@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 
 	"github.com/CGSG-2021-AE4/rc2/api"
 	tcpw "github.com/CGSG-2021-AE4/rc2/pkg/tcp_wrapper"
@@ -16,20 +17,18 @@ import (
 type Service struct {
 	listenAddr string
 
-	listenerContext context.Context // Used to shut down listenning
-	stopListener    context.CancelFunc
+	runCtx   context.Context // Used to shut down listenning
+	stopRun  context.CancelFunc
+	ctxMutex sync.Mutex
 
 	clients *clientRegister
 }
 
 // Constructor
 func New(listenAddr string) *Service {
-	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{
-		listenAddr:      listenAddr,
-		listenerContext: ctx,
-		stopListener:    cancel,
-		clients:         newClientRegister(),
+		listenAddr: listenAddr,
+		clients:    newClientRegister(),
 	}
 }
 
@@ -43,7 +42,7 @@ func (cs *Service) RunSync() error {
 ListenLoop:
 	for {
 		log.Println("Listenning...") // Debug
-		connAc, err := server.Listen(cs.listenerContext)
+		connAc, err := server.Listen(cs.runCtx)
 		if err != nil {
 			return err
 		}
@@ -56,12 +55,12 @@ ListenLoop:
 			return err
 		}
 		if cs.clients.Exist(authMsg.Login) {
-			connAc.Decline(cs.listenerContext, []byte("Client with login "+authMsg.Login+" is already connected"))
+			connAc.Decline(cs.runCtx, []byte("Client with login "+authMsg.Login+" is already connected"))
 			continue ListenLoop
 		}
 
 		// Accepting
-		conn, err := connAc.Accept(cs.listenerContext)
+		conn, err := connAc.Accept(cs.runCtx)
 		if err != nil {
 			return err
 		}
@@ -81,9 +80,25 @@ ListenLoop:
 }
 
 func (cs *Service) Run() {
+	// Assume that service is not running
+	cs.ctxMutex.Lock()
+	defer cs.ctxMutex.Unlock()
+
+	cs.runCtx, cs.stopRun = context.WithCancel(context.Background())
 	go api.RunAndLog(cs.RunSync, "client service")
 }
 
+func (cs *Service) Stop() {
+	cs.ctxMutex.Lock()
+	defer cs.ctxMutex.Unlock()
+
+	if cs.runCtx != nil {
+		cs.stopRun()
+		cs.runCtx = nil
+		cs.stopRun = nil
+	}
+}
+
 func (cs *Service) Close() {
-	cs.stopListener() // Cancel context
+	cs.Stop()
 }

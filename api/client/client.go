@@ -88,7 +88,7 @@ func (c *Conn) RunSync() error {
 
 	// Create server
 	server := tcpw.ServerDescriptor{
-		Raddr:   c.config.URL,
+		Raddr:   c.config.Raddr,
 		AuthMsg: authMsgBuf,
 	}
 

@@ -1,6 +1,6 @@
 {
   "homeDir": "Z:/projects/rc/",
-  "url": "127.0.0.1:3047",
+  "raddr": "127.0.0.1:3047",
   "login": "cgsg95",
   "password": "aboba",
   "scripts": [

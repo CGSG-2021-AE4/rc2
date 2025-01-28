@@ -12,7 +12,7 @@ type ScriptDescriptor struct {
 
 type Config struct {
 	HomeDir  string             `json:"homeDir"`
-	URL      string             `json:"url"`
+	Raddr    string             `json:"raddr"` // Server address:port
 	Login    string             `json:"login"`
 	Password string             `json:"password"`
 	Scripts  []ScriptDescriptor `json:"scripts"`
@@ -20,7 +20,6 @@ type Config struct {
 
 // Config
 func LoadConfig(filename string) (*Config, error) {
-
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
